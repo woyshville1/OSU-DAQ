@@ -8,6 +8,7 @@
 
 #include "CAENDigitizer.h"
 #include "RunConfiguration.h"
+#include "DataFormat.h"
 
 #include "TROOT.h"
 
@@ -27,21 +28,23 @@ struct EventNode {
   EventNode * nxt;
   EventNode * prv;
 
-  //uint8_t  GrPresent[nSamBlocks];       // if the group has data the value is 1 (else 0)
+  DataFormat * data;
+
+  uint8_t  GrPresent[nSamBlocks];       // if the group has data the value is 1 (else 0)
 
   uint32_t ChSize[nSamBlocks];          // number of samples stored in DataChannel array
   float** Waveform;
   uint16_t TriggerCount[nSamBlocks][nChannelsPerSamBlock];
   uint16_t TimeCount[nSamBlocks][nChannelsPerSamBlock];
   uint8_t EventId[nSamBlocks];
-  //uint16_t StartIndexCell[nSamBlocks];
+  uint16_t StartIndexCell[nSamBlocks];
   uint64_t TDC[nSamBlocks];
-  //float PosEdgeTimeStamp[nSamBlocks];
-  //float NegEdgeTimeStamp[nSamBlocks];
-  //uint16_t PeakIndex[nSamBlocks];
-  //float Peak[nSamBlocks];
-  //float Baseline[nSamBlocks];
-  //float Charge[nSamBlocks];
+  float PosEdgeTimeStamp[nSamBlocks];
+  float NegEdgeTimeStamp[nSamBlocks];
+  uint16_t PeakIndex[nSamBlocks];
+  float Peak[nSamBlocks];
+  float Baseline[nSamBlocks];
+  float Charge[nSamBlocks];
 
   uint16_t StartIndexCell[nChannels][256];
   float Charge[nChannels][256];
@@ -57,24 +60,29 @@ class DAQ {
   DAQ();
   virtual ~DAQ() { errorMessageMap.clear(); };
 
-  void SetTriggerDelay(uint8_t TriggerDelay);
-  void SetPulserParameters(vector<ChannelConfiguration> channels);
-  void SetSamplingFrequency(CAEN_DGTZ_SAMFrequency_t SamplingFrequency);
-  void SetPuslerParameters(vector<ChannelConfiguration> channels);
-  void SetTriggerThreshold(double TriggerThreshold, int channel);
-  void SetTriggerPolarity(CAEN_DGTZ_TriggerPolarity_t TriggerPolarity, int channel);
-  void SetTriggerSource(RunConfiguration cfg);
-  void SetIOLevel(CAEN_DGTZ_IOLevel_t level);
-  void SetChannelDCOffset(RunConfiguration cfg);
-  void SetCorrectionLevel(CAEN_DGTZ_SAM_CORRECTION_LEVEL_t level);
-  void SetMaxNumEventsBLT(int MaxNumEventsBLT);
-  void SetRecordLength(uint32_t RecordLength);
+  // DAQ() first reads default.xml, and then ReadConfiguration can be called to overwrite those settings
+  bool ReadConfiguration(string filename);
+
+  // CAEN V1743 settings read from RunConfiguration object
+  // Called in InitializeBoardParameters()
+  void SetTriggerDelay();
+  void SetPulserParameters();
+  void SetSamplingFrequency();
+  void SetPuslerParameters();
+  void SetTriggerThresholds();
+  void SetTriggerPolarities();
+  void SetTriggerSource();
+  void SetIOLevel();
+  void SetChannelDCOffsets();
+  void SetCorrectionLevel();
+  void SetMaxNumEventsBLT();
+  void SetRecordLength();
   void SetAnalogMonitorOutput();
 
-  void ConnectToBoard(RunConfiguration cfg);
-  void InitializeBoardParameters(RunConfiguration cfg);
+  void ConnectToBoard();
+  void InitializeBoardParameters();
   void MallocReadoutBuffer();
-  void SetGroupEnableMask(RunConfiguration cfg);
+  void SetGroupEnableMask();
 
   void StartRun();
   void StopRun();
@@ -87,11 +95,17 @@ class DAQ {
 
   void CloseDevice();
 
+  // Read the event buffer, and for every event read create an EventNode
+  // Then insert the EventNode into the master queue
+  int ReadCycle(EventNode** head, EventNode** tail, unsigned int& queueCount) {
+    if(cfg->useChargeMode) return ProcessDPPEvent(&head, &tail, queueCount);
+    else return ProcessEvent(&head, &tail, queueCount);
+  }
+
   int ProcessEvent(EventNode** head, EventNode** tail, unsigned int& queueCount);
   int ProcessDPPEvent(EventNode** head, EventNode** tail, unsigned int& queueCount);
 
   bool UseChargeMode() { return cfg->useChargeMode; };
-  bool UseIRQ() { return cfg->useIRQ; };
   uint32_t GetRecordLength() { return cfg->recordLength; };
 
  private:
@@ -104,8 +118,6 @@ class DAQ {
   void WriteRegister(uint16_t reg, uint32_t data, bool verbose = false);
 
   int DeviceHandle;
-  int EventNumber;
-  int TotalEventNumber;
 
   TriggerType_t TriggerType;
 
@@ -113,8 +125,6 @@ class DAQ {
   uint32_t ReadoutBufferSize;
   uint32_t MaxReadoutBufferSize;
   uint32_t DPPReadoutBufferSize;
-
-  uint32_t irqTimeout;
 
   CAEN_DGTZ_EventInfo_t eventInfo;
 

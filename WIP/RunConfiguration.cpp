@@ -3,8 +3,8 @@
 
 #include "RunConfiguration.h"
 
-int RunConfiguration::ParseConfigFile(string filename) {
-  printf("reading %s\n", filename.c_str());
+bool RunConfiguration::ParseConfigFile(string filename) {
+  printf("Reading %s\n", filename.c_str());
   using namespace boost;
   using namespace property_tree;
   ptree pt;
@@ -32,8 +32,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       if (str_ == "opticalLink") LinkType = CAEN_DGTZ_OpticalLink;
       else if (str_ == "USB") LinkType = CAEN_DGTZ_USB;
       else {
-	cout << "Invalid connection type!" << endl;
-	return -1;
+	       cout << "Invalid connection type!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -50,8 +50,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       if (str_ == "RORA") irqMode = CAEN_DGTZ_IRQ_MODE_RORA;
       else if (str_ == "ROAK") irqMode = CAEN_DGTZ_IRQ_MODE_ROAK;
       else {
-	cout << "Invalid IRQ mode!" << endl;
-	return -1;
+	       cout << "Invalid IRQ mode!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -64,8 +64,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       if (str_ == "1") suppressChargeBaseline = CAEN_DGTZ_ENABLE;
       else if (str_ == "0") suppressChargeBaseline = CAEN_DGTZ_DISABLE;
       else {
-	cout << "Invalid value for supressChargeBaseline!" << endl;
-	return -1;
+	       cout << "Invalid value for supressChargeBaseline!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -78,8 +78,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       else if (str_ == "pedestalOnly") SAMCorrectionLevel = CAEN_DGTZ_SAM_CORRECTION_PEDESTAL_ONLY;
       else if (str_ == "correctionDisabled") SAMCorrectionLevel = CAEN_DGTZ_SAM_CORRECTION_DISABLED;
       else {
-	cout << "Invalid SAM correction level!" << endl;
-	return -1;
+	       cout << "Invalid SAM correction level!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -92,8 +92,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       else if (str_ == "0.8") SAMFrequency = CAEN_DGTZ_SAM_800MHz;
       else if (str_ == "0.4") SAMFrequency = CAEN_DGTZ_SAM_400MHz;
       else {
-	cout << "Invalid SAM frequency!" << endl;
-	return -1;
+	       cout << "Invalid SAM frequency!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -102,8 +102,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
     if (name == "recordLength") {
       RecordLength = sub_pt.get<unsigned int>("<xmlattr>.length");
       if (RecordLength % 16 != 0 || RecordLength < 4 * 16 || RecordLength <= 0) {
-	cout << "Invalid record length!" << endl;
-	return -1;
+	       cout << "Invalid record length!" << endl;
+         return false;
       }
 
       numCommonParametersRead++;
@@ -112,8 +112,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
     if (name == "triggerDelay") {
       TriggerDelay = sub_pt.get<unsigned char>("<xmlattr>.delay");
       if ((uint32_t)TriggerDelay >= RecordLength) {
-	cout << "Invalid trigger delay!" << endl;
-	return -1;
+	       cout << "Invalid trigger delay!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -126,8 +126,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       else if (str_ == "auto") TriggerType = SYSTEM_TRIGGER_AUTO;
       else if (str_ == "external") TriggerType = SYSTEM_TRIGGER_EXTERN;
       else {
-	cout << "Invalid trigger type!" << endl;
-	return -1;
+	       cout << "Invalid trigger type!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -138,8 +138,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       if (str_ == "TTL") IOLevel = CAEN_DGTZ_IOLevel_TTL;
       else if (str_ == "NIM") IOLevel = CAEN_DGTZ_IOLevel_NIM;
       else {
-	cout << "Invalid IO level!" << endl;
-	return -1;
+	       cout << "Invalid IO level!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -158,8 +158,8 @@ int RunConfiguration::ParseConfigFile(string filename) {
       else if (str_ == "and") GroupTriggerLogic = CAEN_DGTZ_LOGIC_AND;
       else if (str_ == "majority") GroupTriggerLogic = CAEN_DGTZ_LOGIC_MAJORITY;
       else {
-	cout << "Invalid group trigger logic!" << endl;
-	return -1;
+	       cout << "Invalid group trigger logic!" << endl;
+	       return false;
       }
 
       numCommonParametersRead++;
@@ -179,7 +179,7 @@ int RunConfiguration::ParseConfigFile(string filename) {
     if (groupNumber > numGroups) continue;
 
     uint16_t gate = sub_pt.get<unsigned short>("<xmlattr>.coincidenceWindow");
-		
+
     CAEN_DGTZ_TrigerLogic_t logic_;
     str_ = sub_pt.get<string>("<xmlattr>.logic");
     if (str_ == "or") logic_ = CAEN_DGTZ_LOGIC_OR;
@@ -189,9 +189,9 @@ int RunConfiguration::ParseConfigFile(string filename) {
 
     if (groupNumber < 0) {
       for (int j = 0; j < numGroups; j++) {
-	groups[j].logic = logic_;
-	groups[j].coincidenceWindow = gate;
-	groups[j].modified = true;
+	       groups[j].logic = logic_;
+	       groups[j].coincidenceWindow = gate;
+	       groups[j].modified = true;
       }
     }
 
@@ -256,7 +256,7 @@ int RunConfiguration::ParseConfigFile(string filename) {
 
   }
 
-  return 0;
+  return true;
 
 }
 
