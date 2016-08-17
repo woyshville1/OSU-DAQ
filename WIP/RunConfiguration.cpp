@@ -1,5 +1,5 @@
-#ifndef RUNCONFIGURATION_CPP
-#define RUNCONFIGURATION_CPP
+#ifndef __RUNCONFIGURATION_CPP
+#define __RUNCONFIGURATION_CPP
 
 #include "RunConfiguration.h"
 

@@ -1,5 +1,5 @@
-#ifndef RUNCONFIGURATION_H
-#define RUNCONFIGURATION_H
+#ifndef __RUNCONFIGURATION_H
+#define __RUNCONFIGURATION_H
 
 #include <iostream>
 #include <fstream>
@@ -68,7 +68,7 @@ class RunConfiguration {
     channels.clear();
   };
 
-  int ParseConfigFile(string filename);
+  bool ParseConfigFile(string filename);
 
   bool CheckAllParametersSet() {
     bool value = true;

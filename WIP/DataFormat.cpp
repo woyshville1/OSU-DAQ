@@ -1,10 +1,17 @@
+#ifndef __DATAFORMAT_CPP
+#define __DATAFORMAT_CPP
+
 #include "DataFormat.h"
 
 using namespace std;
 
-DataFormat::DataFormat(char * filename, int samples) {
+DataFormat::DataFormat(const char * filename, int samples, bool chargeMode) {
 
+
+	printf("\n\n\nNew DataFormat object!\n\n\n");
+	
   numSamples = samples;
+  useChargeMode = chargeMode;
 
   tree = new TTree("data", "Data");
   tree->SetAutoSave(10000000); // 10 MB
@@ -17,9 +24,9 @@ DataFormat::DataFormat(char * filename, int samples) {
 DataFormat::~DataFormat() {
   WriteData();
   output->Close();
-  if(data) delete data;
-  for(int i = 0; i < numChannels; i++) {
-    if(histograms[i]) delete histograms[i];
+  if(tree) delete tree;
+  for(int i = 0; i < nChannels; i++) {
+    if(_histograms[i]) delete _histograms[i];
   }
 }
 
@@ -27,22 +34,22 @@ void DataFormat::DefineData() {
 
   TString branchName, name, title;
   TString channelName;
-  for(int i = 0; i < numChannels; i++) {
+  for(int i = 0; i < nChannels; i++) {
 
     channelName = Form("%d", i);
 
-    if(useChargeMode) tree->Branch("charge_" + channelName, &charge[i]);
+    if(useChargeMode) tree->Branch("charge_" + channelName, &_charge[i]);
 
     else {
-      histograms[i] = new TH1D("trace_" + channelName, "Trace of channel " + channelName, numSamples, 0, numSamples);
-      tree->Branch("channel_" + channelName, &(histograms[i]));
+      _histograms[i] = new TH1D("trace_" + channelName, "Trace of channel " + channelName, numSamples, 0, numSamples);
+      tree->Branch("channel_" + channelName, &(_histograms[i]));
 
-      tree->Branch("triggerCount_" + channelName, &trigCount[i]);
-      tree->Branch("timeCount_" + channelName, &timeCount[i]);
-      tree->Branch("TDC_" + channelName, &tdc[i]);
+      tree->Branch("triggerCount_" + channelName, &_trigCount[i]);
+      tree->Branch("timeCount_" + channelName, &_timeCount[i]);
+      tree->Branch("TDC_" + channelName, &_tdc[i]);
 
-      tree->Branch("min", &min[i]);
-      tree->Branch("max", &max[i]);
+      tree->Branch("min_" + channelName, &_min[i]);
+      tree->Branch("max_" + channelName, &_max[i]);
     }
 
   }
@@ -53,9 +60,9 @@ void DataFormat::AddEvent(EventNode * node) {
 
   if(useChargeMode) {
 
-    for(int event = 0; event < node->NumEvents[0]; i++) {
-      for(int ch = 0; ch < numChannels; ch++) {
-        charge[i] = node->Charge[ch][ev];
+    for(int event = 0; event < node->NumEvents[0]; event++) {
+      for(int ch = 0; ch < nChannels; ch++) {
+        _charge[ch] = node->Charge[ch][event];
       }
       tree->Fill();
     }
@@ -69,17 +76,17 @@ void DataFormat::AddEvent(EventNode * node) {
   	  int groupIndex = (int)(i / 2);
   	  int channelIndex = i % 2;
 
-      trigCount[i] = node->TriggerCount[samIndex][chanIndex];
-  	  timeCount[i] = node->TimeCount[samIndex][chanIndex];
-  	  tdc[i] = node->TDC[samIndex];
+      _trigCount[i] = node->TriggerCount[groupIndex][channelIndex];
+  	  _timeCount[i] = node->TimeCount[groupIndex][channelIndex];
+  	  _tdc[i] = node->TDC[groupIndex];
 
-      min[i] = 1.e6;
-      max[i] = -1.e6;
+      _min[i] = 1.e6;
+      _max[i] = -1.e6;
 
       for(int j = 0; j < numSamples; j++) {
-        histograms[i]->SetBinContent(i+1, node->Waveform[i][j] * ADCTOVOLTS);
-        if(node->Waveform[i][j] * ADCTOVOLTS < min[i]) min[i] = node->Waveform[i][j] * ADCTOVOLTS;
-        if(node->Waveform[i][j] * ADCTOVOLTS > max[i]) max[i] = node->Waveform[i][j] * ADCTOVOLTS;
+        _histograms[i]->SetBinContent(j+1, node->Waveform[i][j] * ADCTOVOLTS);
+        if(node->Waveform[i][j] * ADCTOVOLTS < _min[i]) _min[i] = node->Waveform[i][j] * ADCTOVOLTS;
+        if(node->Waveform[i][j] * ADCTOVOLTS > _max[i]) _max[i] = node->Waveform[i][j] * ADCTOVOLTS;
     	}
 
     } // for channels
@@ -96,3 +103,5 @@ void DataFormat::WriteData() {
   output->Close();
 
 }
+
+#endif

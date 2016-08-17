@@ -43,10 +43,12 @@ void * acquisitionLoop(void*) {
 
   DAQ * acq = new DAQ();
 
-  // durp
+  // durp -- shouldn't need to write this every time
   string configFile = "";
   cout << endl << "Enter configuration file name (e.g. pmt.xml): ";
   cin >> configFile;
+  cout << endl << endl;
+
   acq->ReadConfiguration(configFile);
 
   useChargeMode = acq->UseChargeMode();
@@ -115,7 +117,19 @@ void * eventProcessLoop(void*) {
   EventNode * localHead;
   EventNode * localTail;
 
-  DataFormat * output(outputFileName, recordLength);
+  // Wait for run to start
+  pthread_mutex_lock(&RunStatusMutex);
+  while (!RunActive) {
+	  pthread_mutex_unlock(&RunStatusMutex);
+	  Sleep(100); // ms
+	  pthread_mutex_lock(&RunStatusMutex);
+  }
+  pthread_mutex_unlock(&RunStatusMutex);
+
+  // durp -- can't accept charge integral window from RunConfiguration because cfg isn't in this thread/scope
+  // durp -- needs an option to enable/disable saving all waveforms, since they become large
+  // durp -- lastly, needs a copy of cfg so that it can shut off channels to save space
+  DataFormat * output = new DataFormat(outputFileName.c_str(), recordLength, useChargeMode);
 
   pthread_mutex_lock(&AcquisitionStatusMutex);
   while (!StopAcquisition) {
@@ -136,7 +150,7 @@ void * eventProcessLoop(void*) {
 
       freeEvent(localHead->prv);
 
-      output->AddEvent(localHead);
+      output->AddEvent(localHead); // durp -- doesn't calculate charge
 
       if(useChargeMode) {
         eventsInQueue -= localHead->NumEvents[0];
@@ -155,7 +169,7 @@ void * eventProcessLoop(void*) {
   }
   pthread_mutex_unlock(&AcquisitionStatusMutex);
 
-  output->WriteData();
+  delete output; // deconstructor calls TFile::Write()
 
   cout << "All events processed" << endl;
   pthread_exit(NULL);
@@ -174,7 +188,6 @@ int main(int argc, char* argv[]) {
   // Get output file name
   cout << endl << "Enter desired output file name: ";
   cin >> outputFileName;
-
   cout << endl << endl;
 
   // Set up threads
@@ -214,7 +227,7 @@ int main(int argc, char* argv[]) {
 
   // If maximum number of events is specified
   if (argc == 3) {
-    int maxEvents = atoi(argv[2]);
+    unsigned int maxEvents = atoi(argv[2]);
     while (!endRun) {
       final = time::now();
       if ((int)elapsed.count() % 5 == 0 && (int)elapsed.count() > lastPrint) { // every 5 seconds
@@ -259,6 +272,7 @@ int main(int argc, char* argv[]) {
   cout << "Recorded: " << recordedEvents << " events!" << endl;
   cout << "Run Time: " << elapsed.count() << "s" << endl;
 
+  /*
   if (!useChargeMode) {
     TFile * fTest = new TFile((TString)outputFileName, "READ");
     TTree * tTest = (TTree*)fTest->Get("Channel_1");
@@ -273,6 +287,7 @@ int main(int argc, char* argv[]) {
     fTest->Close();
     cout << "Effective events: " << totalEff << endl << endl;
   }
+  */
 
   return 0;
 }

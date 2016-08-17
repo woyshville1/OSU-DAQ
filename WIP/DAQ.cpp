@@ -1,5 +1,5 @@
-#ifndef DAQ_CPP
-#define DAQ_CPP
+#ifndef __DAQ_CPP
+#define __DAQ_CPP
 
 #include "DAQ.h"
 
@@ -18,8 +18,7 @@ EventNode * CopyEvent(CAEN_DGTZ_X743_EVENT_t * evt) {
 
   for (int samIndex = 0; samIndex < nSamBlocks; samIndex++) {
 
-    //node->GrPresent[samIndex] = evt->GrPresent[samIndex];
-
+    node->GrPresent[samIndex] = evt->GrPresent[samIndex];
     node->ChSize[samIndex] = evt->DataGroup[samIndex].ChSize;
 
     for (int i = 0; i < nChannelsPerSamBlock; i++) {
@@ -32,14 +31,14 @@ EventNode * CopyEvent(CAEN_DGTZ_X743_EVENT_t * evt) {
     }
 
     node->EventId[samIndex] = evt->DataGroup[samIndex].EventId;
-    //node->StartIndexCell[samIndex] = evt->DataGroup[samIndex].StartIndexCell;
+    node->StartIndexCell[samIndex][0] = evt->DataGroup[samIndex].StartIndexCell;
     node->TDC[samIndex] = evt->DataGroup[samIndex].TDC;
-    //node->PosEdgeTimeStamp[samIndex] = evt->DataGroup[samIndex].PosEdgeTimeStamp;
-    //node->NegEdgeTimeStamp[samIndex] = evt->DataGroup[samIndex].NegEdgeTimeStamp;
-    //node->PeakIndex[samIndex] = evt->DataGroup[samIndex].PeakIndex;
-    //node->Peak[samIndex] = evt->DataGroup[samIndex].Peak;
-    //node->Baseline[samIndex] = evt->DataGroup[samIndex].Baseline;
-    //node->Charge[samIndex] = evt->DataGroup[samIndex].Charge;
+    node->PosEdgeTimeStamp[samIndex] = evt->DataGroup[samIndex].PosEdgeTimeStamp;
+    node->NegEdgeTimeStamp[samIndex] = evt->DataGroup[samIndex].NegEdgeTimeStamp;
+    node->PeakIndex[samIndex] = evt->DataGroup[samIndex].PeakIndex;
+    node->Peak[samIndex] = evt->DataGroup[samIndex].Peak;
+    node->Baseline[samIndex] = evt->DataGroup[samIndex].Baseline;
+    node->Charge[samIndex][0] = evt->DataGroup[samIndex].Charge;
 
   }
 
@@ -124,26 +123,31 @@ DAQ::DAQ() {
   errorMessageMap[CAEN_DGTZ_InvalidProbe] = "The given probe is not supported for the given digitizer's trace.";
   errorMessageMap[CAEN_DGTZ_NotYetImplemented] = "The function is not yet implemented.";
 
-  cfg = new RunConfiguration();
-  if(!cfg.ParseConfigFile("default.xml") || !cfg.CheckAllParametersSet()) {
-    printf("\n\nInvalid configuration file!\n\n");
-    exit(0);
-  }
+  if(!ReadConfiguration("default.xml")) exit(0);
 
-  useChargeMode = cfg.useChargeMode;
-  recordLength = cfg.RecordLength;
-  useChargeMode = cfg.useChargeMode;
+}
+
+bool DAQ::ReadConfiguration(string filename) {
+  RunConfiguration * config = new RunConfiguration();
+
+  if(!config->ParseConfigFile(filename) || !config->CheckAllParametersSet()) {
+    printf("\n\nInvalid configuration file: %s\n\n", filename.c_str());
+    return false;
+  }
+  else cfg = config;
+
+  return true;
 
 }
 
 void DAQ::Try(char * name, CAEN_DGTZ_ErrorCode code, bool verbose) {
   if(code || verbose) {
-    printf("%s: %s\n", name, errorMessageMap.find(code)->second);
+    printf("%s: %s\n", name, errorMessageMap.find(code)->second.c_str());
   }
 }
 
 void DAQ::Require(char * name, CAEN_DGTZ_ErrorCode code, bool verbose) {
-  if(code || verbose) printf("%s: %s\n", name, errorMessageMap.find(code)->second);
+  if(code || verbose) printf("%s: %s\n", name, errorMessageMap.find(code)->second.c_str());
 
   if(code) {
     printf("\nFatal Error!\n");
@@ -154,17 +158,17 @@ void DAQ::Require(char * name, CAEN_DGTZ_ErrorCode code, bool verbose) {
 void DAQ::ReadRegister(uint16_t reg, uint32_t * data, bool verbose) {
   CAEN_DGTZ_ErrorCode ret = CAEN_DGTZ_ReadRegister(DeviceHandle, reg, data);
   if(ret) {
-    printf("Error reading from %x: %d\n", reg, errorMessageMap.find(ret)->second);
+    printf("Error reading from %x: %s\n", reg, errorMessageMap.find(ret)->second.c_str());
     return;
   }
 
-  if(verbose) printf("Successfully read from %x: %d\n", reg, data);
+  if(verbose) printf("Successfully read from %x: %u\n", reg, data);
 }
 
 void DAQ::WriteRegister(uint16_t reg, uint32_t data, bool verbose) {
   CAEN_DGTZ_ErrorCode ret = CAEN_DGTZ_WriteRegister(DeviceHandle, reg, data);
   if(ret) {
-    printf("Error writing to register %x: %s\n", reg, errorMessageMap.find(ret)->second);
+    printf("Error writing to register %x: %s\n", reg, errorMessageMap.find(ret)->second.c_str());
     return;
   }
 
@@ -178,12 +182,12 @@ void DAQ::WriteRegister(uint16_t reg, uint32_t data, bool verbose) {
   if(verbose) printf("Successfully wrote %d to register %x\n", data, reg);
 }
 
-void DAQ::ConnectToBoard(RunConfiguration cfg) {
+void DAQ::ConnectToBoard() {
 
-  Require("OpenDigitizer", CAEN_DGTZ_OpenDigitizer(cfg.LinkType,
-						   cfg.LinkNum,
-						   cfg.ConetNode,
-						   cfg.VMEBaseAddress,
+  Require("OpenDigitizer", CAEN_DGTZ_OpenDigitizer(cfg->LinkType,
+						   cfg->LinkNum,
+						   cfg->ConetNode,
+						   cfg->VMEBaseAddress,
 						   &DeviceHandle));
 
   CAEN_DGTZ_BoardInfo_t info;
@@ -215,13 +219,13 @@ void DAQ::ConnectToBoard(RunConfiguration cfg) {
 
 }
 
-void DAQ::InitializeBoardParameters(RunConfiguration cfg) {
+void DAQ::InitializeBoardParameters() {
 
-  SetGroupEnableMask(cfg);
-  SetRecordLength(cfg.RecordLength);
-  SetTriggerDelay(cfg.TriggerDelay);
-  SetCorrectionLevel(cfg.SAMCorrectionLevel);
-  SetMaxNumEventsBLT(cfg.MaxNumEventsBLT);
+  SetGroupEnableMask();
+  SetRecordLength();
+  SetTriggerDelay();
+  SetCorrectionLevel();
+  SetMaxNumEventsBLT();
   Try("SetAcquisitionMode", CAEN_DGTZ_SetAcquisitionMode(DeviceHandle, CAEN_DGTZ_SW_CONTROLLED));
 
   uint32_t bitMask = 0;
@@ -240,10 +244,10 @@ void DAQ::InitializeBoardParameters(RunConfiguration cfg) {
 
   SetAnalogMonitorOutput();
 
-  SetChannelDCOffset(cfg);
+  SetChannelDCOffsets();
 
-  SetTriggerSource(cfg);
-  for(int i = 0; i < nChannels; i++) SetTriggerThreshold(cfg.channels[i].triggerThreshold, i);
+  SetTriggerSource();
+  SetTriggerThresholds();
 
   /*
   // durp??
@@ -257,45 +261,36 @@ void DAQ::InitializeBoardParameters(RunConfiguration cfg) {
   printf("%d %d\n", enable, vetoWindow);
   */
 
-  useChargeMode = cfg.useChargeMode;
-  useIRQ = cfg.useIRQ;
+  SetSamplingFrequency();
+  SetPulserParameters();
 
-  SetSamplingFrequency(cfg.SAMFrequency);
-  SetPulserParameters(cfg.channels);
+  SetIOLevel();
 
-  SetIOLevel(cfg.IOLevel);
+  SetTriggerPolarities();
 
-  for(int i = 0; i < nChannels; i++) SetTriggerPolarity(cfg.channels[i].triggerPolarity, i);
-
-
-
-
-
-  if(cfg.useIRQ) {
+  if(cfg->useIRQ) {
     Try("SetInterruptConfig", CAEN_DGTZ_SetInterruptConfig(DeviceHandle,
 							   CAEN_DGTZ_ENABLE,
-							   cfg.irqLevel,
-							   cfg.irqStatusId,
-							   cfg.irqNEvents,
-							   cfg.irqMode));
-
-    irqTimeout = cfg.irqTimeout;
+							   cfg->irqLevel,
+							   cfg->irqStatusId,
+							   cfg->irqNEvents,
+							   cfg->irqMode));
   }
 
-  if(cfg.useChargeMode) {
+  if(cfg->useChargeMode) {
 
     Try("SetSAMAcquisitionMode", CAEN_DGTZ_SetSAMAcquisitionMode(DeviceHandle, CAEN_DGTZ_AcquisitionMode_DPP_CI));
 
     CAEN_DGTZ_DPP_X743_Params_t DPPParams;
 
-    if      (cfg.suppressChargeBaseline == 1) { DPPParams.disableSuppressBaseline = CAEN_DGTZ_DISABLE; }
-    else if (cfg.suppressChargeBaseline == 0) { DPPParams.disableSuppressBaseline = CAEN_DGTZ_ENABLE; }
-    // DPPParams.disableSuppressBaseline = cfg.suppressChargeBaseline;
+    if      (cfg->suppressChargeBaseline == 1) { DPPParams.disableSuppressBaseline = CAEN_DGTZ_DISABLE; }
+    else if (cfg->suppressChargeBaseline == 0) { DPPParams.disableSuppressBaseline = CAEN_DGTZ_ENABLE; }
+    // DPPParams.disableSuppressBaseline = cfg->suppressChargeBaseline;
     for (int i = 0; i < nChannels; i++) {
-      DPPParams.startCell[i] = cfg.channels[i].chargeStartCell;
-      DPPParams.chargeLength[i] = cfg.channels[i].chargeLength;
-      DPPParams.enableChargeThreshold[i] = cfg.channels[i].enableChargeThreshold;
-      DPPParams.chargeThreshold[i] = cfg.channels[i].chargeThreshold;
+      DPPParams.startCell[i] = cfg->channels[i].chargeStartCell;
+      DPPParams.chargeLength[i] = cfg->channels[i].chargeLength;
+      DPPParams.enableChargeThreshold[i] = cfg->channels[i].enableChargeThreshold;
+      DPPParams.chargeThreshold[i] = cfg->channels[i].chargeThreshold;
     }
 
     Try("SetDPPParameters", CAEN_DGTZ_SetDPPParameters(DeviceHandle, 0, &DPPParams));
@@ -306,15 +301,15 @@ void DAQ::InitializeBoardParameters(RunConfiguration cfg) {
 
 void DAQ::MallocReadoutBuffer() {
   Try("MallocReadoutBuffer", CAEN_DGTZ_MallocReadoutBuffer(DeviceHandle, (char**)&ReadoutBuffer, &MaxReadoutBufferSize));
-  if(useChargeMode) Try("MallocDPPEvents", CAEN_DGTZ_MallocDPPEvents(DeviceHandle, (void**)DPPEvents, &DPPReadoutBufferSize));
+  if(cfg->useChargeMode) Try("MallocDPPEvents", CAEN_DGTZ_MallocDPPEvents(DeviceHandle, (void**)DPPEvents, &DPPReadoutBufferSize));
 }
 
-void DAQ::SetGroupEnableMask(RunConfiguration cfg) {
+void DAQ::SetGroupEnableMask() {
 
   uint32_t groupMask = 0;
 
   for(int i = 0; i < nSamBlocks; i++) {
-    if (cfg.channels[2*i].enable || cfg.channels[2*i + 1].enable) groupMask |= (1 << i);
+    if (cfg->channels[2*i].enable || cfg->channels[2*i + 1].enable) groupMask |= (1 << i);
   }
 
   Try("SetGroupEnableMask", CAEN_DGTZ_SetGroupEnableMask(DeviceHandle, groupMask));
@@ -323,7 +318,7 @@ void DAQ::SetGroupEnableMask(RunConfiguration cfg) {
 
 void DAQ::StartRun() {
 
-  if(!useChargeMode) Try("AllocateEvent", CAEN_DGTZ_AllocateEvent(DeviceHandle, (void**)&CurrentEvent));
+  if(!cfg->useChargeMode) Try("AllocateEvent", CAEN_DGTZ_AllocateEvent(DeviceHandle, (void**)&CurrentEvent));
 
   Try("ClearData", CAEN_DGTZ_ClearData(DeviceHandle));
   Try("SWStartAcquisition", CAEN_DGTZ_SWStartAcquisition(DeviceHandle));
@@ -346,7 +341,7 @@ void DAQ::StopRun() {
 			       &nReadBytes);
   }
 
-  if(!useChargeMode) Try("FreeEvent", CAEN_DGTZ_FreeEvent(DeviceHandle, (void**)&CurrentEvent));
+  if(!cfg->useChargeMode) Try("FreeEvent", CAEN_DGTZ_FreeEvent(DeviceHandle, (void**)&CurrentEvent));
   else Try("FreeDPPEvents", CAEN_DGTZ_FreeDPPEvents(DeviceHandle, (void**)DPPEvents));
 
 }
@@ -363,8 +358,8 @@ int DAQ::ReadEventBuffer() {
 
   int error = CAEN_DGTZ_Success;
 
-  if(useIRQ) {
-    error = CAEN_DGTZ_IRQWait(DeviceHandle, irqTimeout); // timeout in ms
+  if(cfg->useIRQ) {
+    error = CAEN_DGTZ_IRQWait(DeviceHandle, cfg->irqTimeout); // timeout in ms
     /*
       if (error != CAEN_DGTZ_Success) {
       //printf("IRQWait: %d\n", error);
@@ -430,8 +425,6 @@ void DAQ::CloseDevice() {
 
 }
 
-// Read the event buffer, and for every event read create an EventNode
-// Then insert the EventNode into the master queue
 int DAQ::ProcessEvent(EventNode** head, EventNode** tail, unsigned int& queueCount) {
 
   int status = 0;
@@ -494,50 +487,54 @@ int DAQ::ProcessDPPEvent(EventNode** head, EventNode** tail, unsigned int& queue
 
 // =================================
 
-void DAQ::SetTriggerDelay(uint8_t TriggerDelay) {
+void DAQ::SetTriggerDelay() {
 
-  // Note: fixme! This can be different for each group.
+  // Note: fixme! This probably can be different for each group.
   //       there should be a group-by-group delay written in register 0x1n30
 
   for(int i = 0; i < nSamBlocks; i++) {
-    Try("SetSAMPostTriggerSize", CAEN_DGTZ_SetSAMPostTriggerSize(DeviceHandle, i, TriggerDelay));
+    Try("SetSAMPostTriggerSize", CAEN_DGTZ_SetSAMPostTriggerSize(DeviceHandle, i, cfg->TriggerDelay));
   }
 
 }
 
-void DAQ::SetSamplingFrequency(CAEN_DGTZ_SAMFrequency_t SamplingFrequency) {
-  Try("SetSAMSamplingFrequency", CAEN_DGTZ_SetSAMSamplingFrequency(DeviceHandle, SamplingFrequency));
+void DAQ::SetSamplingFrequency() {
+  Try("SetSAMSamplingFrequency", CAEN_DGTZ_SetSAMSamplingFrequency(DeviceHandle, cfg->SAMFrequency));
 }
 
-void DAQ::SetPulserParameters(vector<ChannelConfiguration> channels) {
+void DAQ::SetPulserParameters() {
 
   for(int i = 0; i < nChannels; i++) {
-    if(channels[i].testPulseEnable) Try("EnableSAMPulseGen", CAEN_DGTZ_EnableSAMPulseGen(DeviceHandle,
+    if(cfg->channels[i].testPulseEnable) Try("EnableSAMPulseGen", CAEN_DGTZ_EnableSAMPulseGen(DeviceHandle,
 											 i,
-											 channels[i].testPulsePattern,
-											 channels[i].testPulseSource));
+											 cfg->channels[i].testPulsePattern,
+											 cfg->channels[i].testPulseSource));
     else Try("DisableSAMPulseGen", CAEN_DGTZ_DisableSAMPulseGen(DeviceHandle, i));
   }
 
 }
 
-void DAQ::SetTriggerThreshold(double TriggerThreshold, int channel) {
+void DAQ::SetTriggerThresholds() {
 
-  Try("SetChannelTriggerThreshold", CAEN_DGTZ_SetChannelTriggerThreshold(DeviceHandle,
-									 channel,
-									 DACValue(TriggerThreshold)));
-
-}
-
-void DAQ::SetTriggerPolarity(CAEN_DGTZ_TriggerPolarity_t TriggerPolarity, int channel) {
-
-  Try("SetTriggerPolarity", CAEN_DGTZ_SetTriggerPolarity(DeviceHandle, channel, TriggerPolarity));
+  for(int i = 0; i < nChannels; i++) {
+    Try("SetChannelTriggerThreshold", CAEN_DGTZ_SetChannelTriggerThreshold(DeviceHandle,
+									 i,
+									 DACValue(cfg->channels[i].triggerThreshold)));
+  }
 
 }
 
-void DAQ::SetTriggerSource(RunConfiguration cfg) {
+void DAQ::SetTriggerPolarities() {
 
-  TriggerType = cfg.TriggerType;
+  for(int i = 0; i < nChannels; i++) {
+    Try("SetTriggerPolarity", CAEN_DGTZ_SetTriggerPolarity(DeviceHandle, i, cfg->channels[i].triggerPolarity));
+  }
+
+}
+
+void DAQ::SetTriggerSource() {
+
+  TriggerType = cfg->TriggerType;
 
   if (TriggerType == SYSTEM_TRIGGER_SOFT) {
     Try("SetSWTriggerMode", CAEN_DGTZ_SetSWTriggerMode(DeviceHandle, CAEN_DGTZ_TRGMODE_ACQ_ONLY));
@@ -549,7 +546,7 @@ void DAQ::SetTriggerSource(RunConfiguration cfg) {
     //
     uint32_t bitMask = 0;
     for(int i = 0; i < nSamBlocks; i++) {
-      if (cfg.channels[2*i].triggerEnable || cfg.channels[2*i + 1].triggerEnable) bitMask |= (1 << i);
+      if (cfg->channels[2*i].triggerEnable || cfg->channels[2*i + 1].triggerEnable) bitMask |= (1 << i);
     }
     WriteRegister(0x810C, bitMask);
 
@@ -559,14 +556,16 @@ void DAQ::SetTriggerSource(RunConfiguration cfg) {
     // bit[6] = ch1_trig_mask
     for(int i = 0; i < nSamBlocks; i++) {
       bitMask = 0x1;
-      if(cfg.channels[2*i].triggerEnable) bitMask |= (1 << 4);
-      if(cfg.channels[2*i+1].triggerEnable) bitMask |= (1 << 6);
+      if(cfg->channels[2*i].triggerEnable) bitMask |= (1 << 4);
+      if(cfg->channels[2*i+1].triggerEnable) bitMask |= (1 << 6);
       WriteRegister(0x103C + i*0x0100, bitMask);
     }
 
+	/*
     // Testing? durp
     printf("Group 0 pulse is:\n");
     ReadRegister(0x102C, &bitMask, true);
+	*/
 
   }
 
@@ -580,26 +579,28 @@ void DAQ::SetTriggerSource(RunConfiguration cfg) {
 
 }
 
-void DAQ::SetIOLevel(CAEN_DGTZ_IOLevel_t level) {
-  Try("SetIOLevel", CAEN_DGTZ_SetIOLevel(DeviceHandle, level));
+void DAQ::SetIOLevel() {
+  Try("SetIOLevel", CAEN_DGTZ_SetIOLevel(DeviceHandle, cfg->IOLevel));
 }
 
-void DAQ::SetChannelDCOffset(RunConfiguration cfg) {
+void DAQ::SetChannelDCOffsets() {
 
-  for(int i = 0; i < nChannels; i++) Try("SetChannelDCOffset", CAEN_DGTZ_SetChannelDCOffset(DeviceHandle, i, DACValue(cfg.channels[i].dcOffset)));
+  for(int i = 0; i < nChannels; i++) {
+    Try("SetChannelDCOffset", CAEN_DGTZ_SetChannelDCOffset(DeviceHandle, i, DACValue(cfg->channels[i].dcOffset)));
+  }
 
 }
 
-void DAQ::SetCorrectionLevel(CAEN_DGTZ_SAM_CORRECTION_LEVEL_t level) {
-  Try("SetSAMCorrectionLevel", CAEN_DGTZ_SetSAMCorrectionLevel(DeviceHandle, level));
+void DAQ::SetCorrectionLevel() {
+  Try("SetSAMCorrectionLevel", CAEN_DGTZ_SetSAMCorrectionLevel(DeviceHandle, cfg->SAMCorrectionLevel));
 }
 
-void DAQ::SetMaxNumEventsBLT(int MaxNumEventsBLT) {
-  Try("SetMaxNumEventsBLT", CAEN_DGTZ_SetMaxNumEventsBLT(DeviceHandle, MaxNumEventsBLT));
+void DAQ::SetMaxNumEventsBLT() {
+  Try("SetMaxNumEventsBLT", CAEN_DGTZ_SetMaxNumEventsBLT(DeviceHandle, cfg->MaxNumEventsBLT));
 }
 
-void DAQ::SetRecordLength(uint32_t RecordLength) {
-  Try("SetRecordLength", CAEN_DGTZ_SetRecordLength(DeviceHandle, RecordLength));
+void DAQ::SetRecordLength() {
+  Try("SetRecordLength", CAEN_DGTZ_SetRecordLength(DeviceHandle, cfg->RecordLength));
 }
 
 void DAQ::SetAnalogMonitorOutput() {
