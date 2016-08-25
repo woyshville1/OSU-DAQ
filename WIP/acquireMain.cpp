@@ -33,9 +33,36 @@ unsigned int recordedEvents = 0;
 
 bool useChargeMode;
 
+//wip
+//use getch to assign return vals
+bool quitRun;
+bool closeCaen;
+
 uint32_t recordLength = 0;
 
 string outputFileName = "";
+
+//wip
+void * kbdMonLoop(void*) {
+	
+	acq->ConnectToBoard();
+	
+	while(!closeCaen){
+	
+		while(!quitRun){
+			//When kbdMonLoop detects a "q" keypress, set quitRun=1
+			//break this loop
+		}
+		//Now that we have quitRun, go back to start of acquisition process(?) 
+		//such as choosing filename and time limit?
+		
+		//Then when kbdMonLoop detects an "x" keypress, set closeCaen=1
+	}
+	
+	acq->CloseDevice();
+	pthread_exit(NULL)
+	return NULL;
+}
 
 void * acquisitionLoop(void*) {
 
@@ -53,8 +80,6 @@ void * acquisitionLoop(void*) {
 
   useChargeMode = acq->UseChargeMode();
   recordLength = acq->GetRecordLength();
-
-  acq->ConnectToBoard();
 
   acq->InitializeBoardParameters();
   acq->MallocReadoutBuffer();
@@ -101,7 +126,6 @@ void * acquisitionLoop(void*) {
   pthread_mutex_unlock(&AcquisitionStatusMutex);
 
   acq->StopRun();
-  acq->CloseDevice();
 
   delete acq;
 
@@ -193,6 +217,8 @@ int main(int argc, char* argv[]) {
   // Set up threads
   pthread_t readThread;
   pthread_t processThread;
+  //wip
+  pthread_t kbdMonThread;
 
   pthread_attr_t joinableAttr;
   pthread_attr_init(&joinableAttr);
@@ -205,6 +231,8 @@ int main(int argc, char* argv[]) {
 
   pthread_create(&readThread, &joinableAttr, acquisitionLoop, NULL);
   pthread_create(&processThread, &joinableAttr, eventProcessLoop, NULL);
+  //wip
+  pthread_create(&kbdMonThread, &joinableAttr, kbdMonLoop, NULL);
 
   // Set up timing variables
   typedef chrono::high_resolution_clock time;
